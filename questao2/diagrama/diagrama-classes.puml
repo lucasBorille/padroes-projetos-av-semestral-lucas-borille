@@ -1,0 +1,187 @@
+@startuml
+title Questão 2 - Casa de Leilões Online (Observer + Strategy + Decorator)
+skinparam classAttributeIconSize 0
+
+package "Observer - comunicação de lances (RNF01)" {
+  interface Licitante {
+    +getNome(): String
+  }
+  interface ObservadorDeLote <<Observer>> {
+    +atualizar(lote: Lote, lance: Lance)
+  }
+  class Participante <<Concrete Observer>> {
+    -nome: String
+  }
+  class PainelLeiloeiro <<Concrete Observer>>
+  class Auditor <<Concrete Observer>> {
+    -registros: List<String>
+    +getRegistros(): List<String>
+  }
+  class Lance <<record>> {
+    +licitante: Licitante
+    +valor: BigDecimal
+  }
+  class ResultadoLance <<record>> {
+    +aceito: boolean
+    +mensagem: String
+  }
+  enum EstadoLote {
+    ABERTO
+    VENDIDO
+    NAO_VENDIDO
+  }
+  class Lote <<Subject / Context>> {
+    -nome: String
+    -precoInicial: BigDecimal
+    -precoReserva: BigDecimal
+    -observadores: List<ObservadorDeLote>
+    -lances: List<Lance>
+    -regraComissao: RegraComissao
+    -estado: EstadoLote
+    +acompanhar(o: ObservadorDeLote)
+    +deixarDeAcompanhar(o: ObservadorDeLote)
+    +darLance(l: Licitante, valor: BigDecimal): ResultadoLance
+    +trocarRegraComissao(r: RegraComissao)
+    +encerrar(): EstadoLote
+    +getLanceAtual(): BigDecimal
+    +getQuantidadeLances(): int
+  }
+}
+
+package "Strategy - comissão do vendedor (RNF02)" {
+  interface RegraComissao <<Strategy>> {
+    +getNome(): String
+    +calcular(valorVenda: BigDecimal): BigDecimal
+  }
+  class ComissaoArte <<Concrete Strategy>>
+  class ComissaoVeiculos <<Concrete Strategy>>
+  class ComissaoImoveis <<Concrete Strategy>>
+  class ComissaoEletronicos <<Concrete Strategy>>
+  interface Categoria {
+    +getNome(): String
+    +getRegraComissaoPadrao(): RegraComissao
+  }
+  class CategoriaArte
+  class CategoriaVeiculos
+  class CategoriaImoveis
+  class CategoriaEletronicos
+  class AcertoVendedor {
+    +getValorLiquido(): BigDecimal
+    +imprimir()
+  }
+}
+
+package "Decorator - serviços adicionais (RNF03, RNF04)" {
+  interface Fatura <<Component>> {
+    +getNomeLote(): String
+    +getValorVenda(): BigDecimal
+    +getServicos(): List<LinhaFatura>
+    +getTotal(): BigDecimal
+  }
+  class FaturaBasica <<Concrete Component>>
+  abstract class ServicoAdicional <<Decorator>> {
+    -fatura: Fatura
+    -descricao: String
+    #{abstract} calcularCusto(): BigDecimal
+  }
+  class SeguroTransporte <<Concrete Decorator>>
+  class CertificadoAutenticidade <<Concrete Decorator>>
+  class EmbalagemEspecial <<Concrete Decorator>>
+  class EntregaExpressa <<Concrete Decorator>>
+  class LinhaFatura <<record>> {
+    +descricao: String
+    +custo: BigDecimal
+  }
+  class ImpressoraDeFatura <<Client>> {
+    +{static} imprimir(fatura: Fatura)
+  }
+}
+
+class Moeda {
+  +{static} formatar(valor: BigDecimal): String
+}
+class Main
+
+ObservadorDeLote <|.. Participante
+ObservadorDeLote <|.. PainelLeiloeiro
+ObservadorDeLote <|.. Auditor
+Licitante <|.. Participante
+
+Lote o--> "*" ObservadorDeLote
+Lote *--> "*" Lance
+Lote --> EstadoLote
+Lote ..> ResultadoLance : <<create>>
+Lance --> Licitante
+ObservadorDeLote ..> Lote
+ObservadorDeLote ..> Lance
+
+Lote --> RegraComissao : regraComissao
+Lote --> Categoria
+RegraComissao <|.. ComissaoArte
+RegraComissao <|.. ComissaoVeiculos
+RegraComissao <|.. ComissaoImoveis
+RegraComissao <|.. ComissaoEletronicos
+Categoria <|.. CategoriaArte
+Categoria <|.. CategoriaVeiculos
+Categoria <|.. CategoriaImoveis
+Categoria <|.. CategoriaEletronicos
+CategoriaArte ..> ComissaoArte : <<create>>
+CategoriaVeiculos ..> ComissaoVeiculos : <<create>>
+CategoriaImoveis ..> ComissaoImoveis : <<create>>
+CategoriaEletronicos ..> ComissaoEletronicos : <<create>>
+AcertoVendedor ..> Lote
+
+Fatura <|.. FaturaBasica
+Fatura <|.. ServicoAdicional
+ServicoAdicional o--> "1" Fatura : decora
+ServicoAdicional <|-- SeguroTransporte
+ServicoAdicional <|-- CertificadoAutenticidade
+ServicoAdicional <|-- EmbalagemEspecial
+ServicoAdicional <|-- EntregaExpressa
+FaturaBasica ..> Lote
+Fatura ..> LinhaFatura
+ImpressoraDeFatura ..> Fatura
+
+PainelLeiloeiro ..> Moeda
+Participante ..> Moeda
+Lote ..> Moeda
+ImpressoraDeFatura ..> Moeda
+
+Main ..> Lote
+Main ..> Participante
+Main ..> PainelLeiloeiro
+Main ..> Auditor
+Main ..> AcertoVendedor
+Main ..> ImpressoraDeFatura
+Main ..> FaturaBasica
+Main ..> SeguroTransporte
+
+note right of ObservadorDeLote
+  RNF01: Observer. O Lote conhece apenas
+  as interfaces ObservadorDeLote e Licitante.
+  Novo interessado = classe nova.
+  O autor do lance é excluído da notificação
+  comparando a referência, sem tipo concreto.
+end note
+
+note right of RegraComissao
+  RNF02: Strategy. A regra é trocada em tempo de
+  execução (trocarRegraComissao) sem recriar o
+  lote e sem if/switch sobre a categoria.
+  A comissão é calculada no encerramento.
+end note
+
+note right of ServicoAdicional
+  RNF03/RNF04: Decorator. Serviços empilhados
+  em qualquer ordem e quantidade, sem classes
+  de combinação. A impressora trata igualmente
+  uma fatura com ou sem serviços.
+end note
+
+note bottom of Lote
+  RNF05: Lote usa só RegraComissao e
+  ObservadorDeLote. Fatura usa só o valor de
+  venda. Nenhum dos três mecanismos depende
+  dos outros.
+end note
+@enduml

@@ -1,0 +1,171 @@
+@startuml
+title Questão 1 - Provisionamento Multinuvem (Abstract Factory + Singleton)
+skinparam classAttributeIconSize 0
+
+interface FabricaNuvem <<Abstract Factory>> {
+  +getNomeProvedor(): String
+  +criarMaquinaVirtual(numero: int): MaquinaVirtual
+  +criarArmazenamento(numero: int, gb: int): Armazenamento
+  +criarFila(numero: int): Fila
+  +estimarCustoMensal(quantidadeMaquinas: int, gb: int): BigDecimal
+}
+
+class FabricaAws <<Concrete Factory>>
+class FabricaAzure <<Concrete Factory>>
+
+interface Recurso {
+  +getId(): String
+  +getCustoMensal(): BigDecimal
+}
+interface MaquinaVirtual <<Abstract Product>> {
+  {static} HORAS_POR_MES: BigDecimal
+}
+interface Armazenamento <<Abstract Product>> {
+  +getGb(): int
+}
+interface Fila <<Abstract Product>>
+
+class AwsMaquinaVirtual <<Concrete Product>>
+class AwsArmazenamento <<Concrete Product>>
+class AwsFila <<Concrete Product>>
+class AzureMaquinaVirtual <<Concrete Product>>
+class AzureArmazenamento <<Concrete Product>>
+class AzureFila <<Concrete Product>>
+
+class MontadorDeAmbiente <<Client>> {
+  -fabrica: FabricaNuvem
+  +MontadorDeAmbiente(fabrica: FabricaNuvem)
+  +montar(solicitacao: SolicitacaoAmbiente): Ambiente
+}
+
+class Ambiente {
+  -nome: String
+  -provedor: String
+  -regiao: String
+  +getCustoMensal(): BigDecimal
+}
+
+class SolicitacaoAmbiente <<record>> {
+  +nome: String
+  +provedor: String
+  +quantidadeMaquinas: int
+  +gbArmazenamento: int
+}
+
+class SeletorDeProvedor <<Seletor de provedor>> {
+  -fabricas: Map<String, FabricaNuvem>
+  +selecionar(provedor: String): Optional<FabricaNuvem>
+}
+
+class Provisionador {
+  -seletor: SeletorDeProvedor
+  +provisionar(solicitacao: SolicitacaoAmbiente): boolean
+}
+
+class ConfiguracaoGlobal <<Singleton>> {
+  -regiaoPadrao: String
+  -orcamentoMensal: BigDecimal
+  -ConfiguracaoGlobal()
+  +{static} getInstance(): ConfiguracaoGlobal
+  +getRegiaoPadrao(): String
+  +getOrcamentoMensal(): BigDecimal
+}
+class "ConfiguracaoGlobal.Holder" as Holder {
+  -{static} INSTANCIA: ConfiguracaoGlobal
+}
+
+class HistoricoAuditoria <<Singleton>> {
+  -{static} instancia: HistoricoAuditoria
+  -registros: List<RegistroAuditoria>
+  -HistoricoAuditoria()
+  +{static} getInstance(): HistoricoAuditoria
+  +registrar(ambiente: String, provedor: String, resultado: String)
+  +getRegistros(): List<RegistroAuditoria>
+}
+
+class RegistroAuditoria <<record>> {
+  +dataHora: LocalDateTime
+  +ambiente: String
+  +provedor: String
+  +resultado: String
+}
+
+class Main
+
+FabricaNuvem <|.. FabricaAws
+FabricaNuvem <|.. FabricaAzure
+
+Recurso <|-- MaquinaVirtual
+Recurso <|-- Armazenamento
+Recurso <|-- Fila
+
+MaquinaVirtual <|.. AwsMaquinaVirtual
+Armazenamento <|.. AwsArmazenamento
+Fila <|.. AwsFila
+MaquinaVirtual <|.. AzureMaquinaVirtual
+Armazenamento <|.. AzureArmazenamento
+Fila <|.. AzureFila
+
+FabricaAws ..> AwsMaquinaVirtual : <<create>>
+FabricaAws ..> AwsArmazenamento : <<create>>
+FabricaAws ..> AwsFila : <<create>>
+FabricaAzure ..> AzureMaquinaVirtual : <<create>>
+FabricaAzure ..> AzureArmazenamento : <<create>>
+FabricaAzure ..> AzureFila : <<create>>
+
+MontadorDeAmbiente --> FabricaNuvem
+MontadorDeAmbiente ..> Ambiente : <<create>>
+MontadorDeAmbiente ..> SolicitacaoAmbiente
+MontadorDeAmbiente ..> ConfiguracaoGlobal
+
+Ambiente o-- "1..*" MaquinaVirtual
+Ambiente o-- "1" Armazenamento
+Ambiente o-- "1" Fila
+
+SeletorDeProvedor o--> "*" FabricaNuvem
+Provisionador --> SeletorDeProvedor
+Provisionador ..> MontadorDeAmbiente : <<create>>
+Provisionador ..> ConfiguracaoGlobal
+Provisionador ..> HistoricoAuditoria
+Provisionador ..> SolicitacaoAmbiente
+
+HistoricoAuditoria o--> "*" RegistroAuditoria
+ConfiguracaoGlobal +-- Holder
+Holder ..> ConfiguracaoGlobal : <<create>>
+
+Main ..> FabricaAws : <<create>>
+Main ..> FabricaAzure : <<create>>
+Main ..> SeletorDeProvedor : <<create>>
+Main ..> Provisionador
+Main ..> HistoricoAuditoria
+
+note right of FabricaNuvem
+  RNF01, RNF02, RNF03: Abstract Factory.
+  Uma única fábrica cria os três recursos do
+  mesmo provedor, impedindo combinações mistas.
+  O MontadorDeAmbiente recebe a fábrica de fora
+  e não conhece nenhuma classe concreta.
+  Novo provedor (ex.: Gcp) = classes novas
+  + uma linha na Main.
+end note
+
+note right of SeletorDeProvedor
+  Componente que escolhe o provedor.
+  Recebe as fábricas disponíveis da Main
+  e resolve por nome, sem if/switch.
+end note
+
+note bottom of ConfiguracaoGlobal
+  RNF04: Singleton com
+  initialization-on-demand holder.
+  config.properties é lido uma única vez,
+  no construtor privado.
+end note
+
+note bottom of HistoricoAuditoria
+  RNF05: Singleton com double-checked
+  locking e volatile. registrar() e
+  getRegistros() sincronizados: nenhum
+  registro é perdido e a ordem é mantida.
+end note
+@enduml
